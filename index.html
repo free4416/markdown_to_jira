@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Markdown Converter</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h3>Options</h3>
+            <div class="option-group">
+                <h4>Header Style</h4>
+                <div class="radio-group">
+                    <label>
+                        <input type="radio" name="headerStyle" value="jira" checked> 
+                        Head Style (h1., h2.)
+                    </label>
+                    <label>
+                        <input type="radio" name="headerStyle" value="bold"> 
+                        Bold Style (*[Title]*)
+                    </label>
+                </div>
+            </div>
+            <!-- More options will be added here -->
+        </div>
+        
+        <div class="main-content">
+            <div class="tab-container">
+                <div class="tabs">
+                    <button class="tab-button active" data-tab="input">Input Markdown</button>
+                    <button class="tab-button" data-tab="jira">JIRA Wiki</button>
+                    <button class="tab-button" data-tab="slack">Slack Markup</button>
+                </div>
+                
+                <div class="tab-content">
+                    <div class="tab-pane active" id="input">
+                        <textarea id="inputMarkdown" placeholder="Paste your markdown here..."></textarea>
+                    </div>
+                    <div class="tab-pane" id="jira">
+                        <textarea id="outputJira" readonly></textarea>
+                    </div>
+                    <div class="tab-pane" id="slack">
+                        <textarea id="outputSlack" readonly></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="js/script.js"></script>
+</body>
+</html> 
