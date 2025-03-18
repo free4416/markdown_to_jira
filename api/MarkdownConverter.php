@@ -86,12 +86,47 @@ class MarkdownConverter {
         return implode("\n", $result);
     }
 
+    private function convertTables($markdown) {
+        // 테이블 패턴 매칭
+        $pattern = '/^\|(.+)\|\s*$\n^\|([-: |]+)\|\s*$\n(^\|(.+)\|\s*$\n?)+/m';
+        
+        return preg_replace_callback($pattern, function($matches) {
+            $lines = explode("\n", $matches[0]);
+            if (count($lines) < 3) {
+                return $matches[0];
+            }
+            
+            // 헤더 행 처리
+            $header_cells = array_map('trim', explode('|', trim($lines[0], '|')));
+            $header = '||' . implode('||', $header_cells) . '||';
+            
+            // 데이터 행 처리
+            $data_rows = [];
+            for ($i = 2; $i < count($lines); $i++) {
+                if (trim($lines[$i])) {
+                    $row_cells = array_map('trim', explode('|', trim($lines[$i], '|')));
+                    $data_rows[] = '|' . implode('|', $row_cells) . '|';
+                }
+            }
+            
+            return $header . "\n" . implode("\n", $data_rows) . "\n";
+        }, $markdown);
+    }
+
     private function convertCodeBlocks($markdown) {
-        return preg_replace_callback('/```(.*?)\n(.*?)```/s', function($matches) {
-            $lang = trim($matches[1]);
+        // Jira에서 지원하는 언어 목록
+        $supported_languages = [
+            'actionscript', 'ada', 'applescript', 'bash', 'c', 'c#', 'c++', 'css',
+            'erlang', 'go', 'groovy', 'haskell', 'html', 'javascript', 'json',
+            'lua', 'nyan', 'objc', 'perl', 'php', 'python', 'r', 'ruby',
+            'scala', 'sql', 'swift', 'visualbasic', 'xml', 'yaml', 'java'
+        ];
+
+        return preg_replace_callback('/```(.*?)\n(.*?)```/s', function($matches) use ($supported_languages) {
+            $lang = strtolower(trim($matches[1]));
             $code = trim($matches[2]);
             
-            if ($lang) {
+            if ($lang && in_array($lang, $supported_languages)) {
                 return "{code:$lang}\n$code\n{code}";
             }
             return "{code}\n$code\n{code}";
@@ -113,6 +148,7 @@ class MarkdownConverter {
         $result = $this->convertImages($result);
         $result = $this->convertLists($result);
         $result = $this->convertBlockquotes($result);
+        $result = $this->convertTables($result);
         
         return $result;
     }
