@@ -97,14 +97,33 @@ class MarkdownConverter {
             }
             
             // 헤더 행 처리
-            $header_cells = array_map('trim', explode('|', trim($lines[0], '|')));
+            $header_cells = explode('|', trim($lines[0], '|'));
+            // 공백 셀 처리 - 완전히 비어있는 대신 최소한 하나의 공백을 유지
+            $header_cells = array_map(function($cell) {
+                $trimmed = trim($cell);
+                return $trimmed === '' ? ' ' : $trimmed;
+            }, $header_cells);
             $header = '||' . implode('||', $header_cells) . '||';
+            
+            // 헤더 행의 셀 수를 기준으로 사용
+            $expected_cell_count = count($header_cells);
             
             // 데이터 행 처리
             $data_rows = [];
             for ($i = 2; $i < count($lines); $i++) {
                 if (trim($lines[$i])) {
-                    $row_cells = array_map('trim', explode('|', trim($lines[$i], '|')));
+                    $row_cells = explode('|', trim($lines[$i], '|'));
+                    // 공백 셀 처리 - 완전히 비어있는 대신 최소한 하나의 공백을 유지
+                    $row_cells = array_map(function($cell) {
+                        $trimmed = trim($cell);
+                        return $trimmed === '' ? ' ' : $trimmed;
+                    }, $row_cells);
+                    
+                    // 셀 수가 헤더보다 적으면 빈 셀 추가
+                    while (count($row_cells) < $expected_cell_count) {
+                        $row_cells[] = ' ';
+                    }
+                    
                     $data_rows[] = '|' . implode('|', $row_cells) . '|';
                 }
             }
@@ -133,6 +152,23 @@ class MarkdownConverter {
         }, $markdown);
     }
 
+    private function convertHorizontalRules($markdown) {
+        // Convert markdown horizontal rules (--- or ***) to Jira horizontal rule (----)
+        $markdown = preg_replace('/^(\-{3,}|\*{3,})$/m', '----', $markdown);
+        return $markdown;
+    }
+
+    private function convertHtmlBr($markdown, $format = 'jira') {
+        if ($format === 'jira') {
+            // Jira에서는 <br> 태그를 실제 줄바꿈으로 처리
+            return preg_replace('/<br\s*\/?>/i', "\n", $markdown);
+        } else if ($format === 'slack') {
+            // Slack에서도 <br> 태그를 실제 줄바꿈으로 처리
+            return preg_replace('/<br\s*\/?>/i', "\n", $markdown);
+        }
+        return $markdown;
+    }
+
     public function toJira($markdown, $headerStyle = 'jira') {
         $result = $markdown;
         
@@ -149,6 +185,8 @@ class MarkdownConverter {
         $result = $this->convertLists($result);
         $result = $this->convertBlockquotes($result);
         $result = $this->convertTables($result);
+        $result = $this->convertHorizontalRules($result);
+        $result = $this->convertHtmlBr($result, 'jira');
         
         return $result;
     }
@@ -184,6 +222,12 @@ class MarkdownConverter {
         
         // Convert images to just URLs
         $result = preg_replace('/!\[(.*?)\]\((.*?)\)/', '$2', $result);
+        
+        // Convert horizontal rules
+        $result = $this->convertHorizontalRules($result);
+        
+        // Convert HTML <br> tags
+        $result = $this->convertHtmlBr($result, 'slack');
         
         // Convert unordered lists
         $result = preg_replace('/^- (.*?)$/m', '• $1', $result);
