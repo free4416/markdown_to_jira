@@ -22,7 +22,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $converter = new MarkdownConverter();
         $result = [
             'jira' => $converter->toJira($markdown, $headerStyle),
-            'slack' => $converter->toSlack($markdown)
+            'slack' => $converter->toSlack($markdown),
+            'plaintext' => $converter->toPlainText($markdown)
         ];
         
         echo json_encode($result);

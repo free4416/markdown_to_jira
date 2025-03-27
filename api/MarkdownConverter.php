@@ -165,6 +165,9 @@ class MarkdownConverter {
         } else if ($format === 'slack') {
             // Slack에서도 <br> 태그를 실제 줄바꿈으로 처리
             return preg_replace('/<br\s*\/?>/i', "\n", $markdown);
+        } else if ($format === 'plaintext') {
+            // 플레인텍스트에서도 <br> 태그를 실제 줄바꿈으로 처리
+            return preg_replace('/<br\s*\/?>/i', "\n", $markdown);
         }
         return $markdown;
     }
@@ -239,6 +242,219 @@ class MarkdownConverter {
         $result = preg_replace('/^> (.*?)$/m', '> $1', $result);
         
         // Clean up any extra newlines
+        $result = preg_replace('/\n{3,}/', "\n\n", $result);
+        
+        return $result;
+    }
+
+    private function convertPlainTextTables($markdown) {
+        // 테이블 패턴 매칭
+        $pattern = '/^\|(.+)\|\s*$\n^\|([-: |]+)\|\s*$\n(^\|(.+)\|\s*$\n?)+/m';
+        
+        return preg_replace_callback($pattern, function($matches) {
+            $lines = explode("\n", $matches[0]);
+            if (count($lines) < 3) {
+                return $matches[0];
+            }
+            
+            // 헤더 추출 및 처리
+            $header_cells = explode('|', trim($lines[0], '|'));
+            $header_cells = array_map('trim', $header_cells);
+            
+            // 구분선 정보 추출 (정렬 방향 등)
+            $separator_line = explode('|', trim($lines[1], '|'));
+            
+            // 각 열의 최대 너비 계산
+            $column_widths = array_fill(0, count($header_cells), 0);
+            
+            // 헤더 행 셀 너비 계산
+            foreach ($header_cells as $i => $cell) {
+                $column_widths[$i] = max($column_widths[$i], mb_strlen(trim($cell)));
+            }
+            
+            // 데이터 행 셀 너비 계산
+            $all_rows = [];
+            $all_rows[] = $header_cells; // 헤더 행 추가
+            
+            for ($i = 2; $i < count($lines); $i++) {
+                if (trim($lines[$i])) {
+                    $row_cells = explode('|', trim($lines[$i], '|'));
+                    $row_cells = array_map('trim', $row_cells);
+                    
+                    // 셀 수 맞추기
+                    while (count($row_cells) < count($header_cells)) {
+                        $row_cells[] = '';
+                    }
+                    
+                    // 열 너비 업데이트
+                    foreach ($row_cells as $j => $cell) {
+                        if ($j < count($column_widths)) {
+                            $column_widths[$j] = max($column_widths[$j], mb_strlen($cell));
+                        }
+                    }
+                    
+                    $all_rows[] = $row_cells;
+                }
+            }
+            
+            // 테이블 문자열 조합
+            $result = '';
+            
+            // 상단 테두리 추가
+            $result .= '+';
+            foreach ($column_widths as $width) {
+                $result .= str_repeat('-', $width + 2) . '+';
+            }
+            $result .= "\n";
+            
+            // 헤더 행 추가
+            $result .= '| ';
+            foreach ($header_cells as $i => $cell) {
+                $result .= $cell . str_repeat(' ', $column_widths[$i] - mb_strlen($cell)) . ' | ';
+            }
+            $result = rtrim($result) . "\n";
+            
+            // 헤더와 데이터 행 사이 구분선 추가
+            $result .= '+';
+            foreach ($column_widths as $width) {
+                $result .= str_repeat('-', $width + 2) . '+';
+            }
+            $result .= "\n";
+            
+            // 데이터 행 추가
+            for ($i = 1; $i < count($all_rows); $i++) {
+                $result .= '| ';
+                foreach ($all_rows[$i] as $j => $cell) {
+                    $result .= $cell . str_repeat(' ', $column_widths[$j] - mb_strlen($cell)) . ' | ';
+                }
+                $result = rtrim($result) . "\n";
+            }
+            
+            // 하단 테두리 추가
+            $result .= '+';
+            foreach ($column_widths as $width) {
+                $result .= str_repeat('-', $width + 2) . '+';
+            }
+            $result .= "\n";
+            
+            return $result;
+        }, $markdown);
+    }
+
+    private function convertPlainTextHeaders($markdown) {
+        // 헤더를 텍스트로 변환하되 구조를 유지
+        $markdown = preg_replace('/^# (.*?)$/m', "$1\n" . str_repeat('=', 50), $markdown);
+        $markdown = preg_replace('/^## (.*?)$/m', "$1\n" . str_repeat('-', 40), $markdown);
+        $markdown = preg_replace('/^### (.*?)$/m', "▪ $1", $markdown);
+        $markdown = preg_replace('/^#### (.*?)$/m', "  ▫ $1", $markdown);
+        $markdown = preg_replace('/^##### (.*?)$/m', "    ‣ $1", $markdown);
+        $markdown = preg_replace('/^###### (.*?)$/m', "      • $1", $markdown);
+        return $markdown;
+    }
+
+    private function convertPlainTextCodeBlocks($markdown) {
+        // 코드 블록을 들여쓰기된 텍스트로 변환
+        return preg_replace_callback('/```(.*?)\n(.*?)```/s', function($matches) {
+            $lang = trim($matches[1]);
+            $code = trim($matches[2]);
+            $lines = explode("\n", $code);
+            
+            $result = "";
+            if ($lang) {
+                $result .= "[코드: " . $lang . "]\n";
+            } else {
+                $result .= "[코드]\n";
+            }
+            
+            // 각 줄을 4칸 들여쓰기
+            foreach ($lines as $line) {
+                $result .= "    " . $line . "\n";
+            }
+            
+            return $result;
+        }, $markdown);
+    }
+
+    private function convertPlainTextInlineCode($markdown) {
+        // 인라인 코드를 그대로 유지 (특수 표시 없이)
+        return preg_replace('/`([^`]+)`/', '$1', $markdown);
+    }
+
+    private function convertPlainTextBold($markdown) {
+        // 굵게 표시를 대문자로 변환
+        return preg_replace_callback('/\*\*(.*?)\*\*/', function($matches) {
+            return strtoupper($matches[1]);
+        }, $markdown);
+    }
+
+    private function convertPlainTextItalic($markdown) {
+        // 이탤릭을 밑줄로 강조
+        return preg_replace('/_(.*?)_/', '_$1_', $markdown);
+    }
+
+    private function convertPlainTextLinks($markdown) {
+        // 링크를 "텍스트 (URL)" 형식으로 변환
+        return preg_replace('/\[(.*?)\]\((.*?)\)/', '$1 ($2)', $markdown);
+    }
+
+    private function convertPlainTextImages($markdown) {
+        // 이미지를 "[이미지: 대체텍스트 (URL)]" 형식으로 변환
+        return preg_replace('/!\[(.*?)\]\((.*?)\)/', '[이미지: $1 ($2)]', $markdown);
+    }
+
+    private function convertPlainTextLists($markdown) {
+        // 순서없는 목록 (들여쓰기 유지)
+        $markdown = preg_replace('/^- (.*?)$/m', '• $1', $markdown);
+        $markdown = preg_replace('/^  - (.*?)$/m', '  ◦ $1', $markdown);
+        $markdown = preg_replace('/^    - (.*?)$/m', '    ▪ $1', $markdown);
+        
+        // 순서있는 목록 (번호 유지)
+        $markdown = preg_replace('/^(\d+)\. (.*?)$/m', '$1. $2', $markdown);
+        
+        return $markdown;
+    }
+
+    private function convertPlainTextBlockquotes($markdown) {
+        // 인용구를 "> " 접두사로 변환
+        $lines = explode("\n", $markdown);
+        $result = [];
+        
+        foreach ($lines as $line) {
+            if (preg_match('/^> (.*)$/', $line, $matches)) {
+                $result[] = "> " . $matches[1];
+            } else {
+                $result[] = $line;
+            }
+        }
+        
+        return implode("\n", $result);
+    }
+
+    private function convertPlainTextHorizontalRules($markdown) {
+        // 가로선을 대시 80개로 변환
+        return preg_replace('/^(\-{3,}|\*{3,})$/m', str_repeat('-', 80), $markdown);
+    }
+
+    public function toPlainText($markdown) {
+        $result = $markdown;
+        
+        // 코드 블록 먼저 변환
+        $result = $this->convertPlainTextCodeBlocks($result);
+        
+        // 다른 요소 변환
+        $result = $this->convertPlainTextHeaders($result);
+        $result = $this->convertPlainTextInlineCode($result);
+        $result = $this->convertPlainTextBold($result);
+        $result = $this->convertPlainTextItalic($result);
+        $result = $this->convertPlainTextLinks($result);
+        $result = $this->convertPlainTextImages($result);
+        $result = $this->convertPlainTextLists($result);
+        $result = $this->convertPlainTextBlockquotes($result);
+        $result = $this->convertPlainTextTables($result);
+        $result = $this->convertPlainTextHorizontalRules($result);
+        $result = $this->convertHtmlBr($result, 'plaintext');
+        
+        // 연속된 빈 줄 정리
         $result = preg_replace('/\n{3,}/', "\n\n", $result);
         
         return $result;
