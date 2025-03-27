@@ -1,43 +1,6 @@
 <?php
 
 class MarkdownConverter {
-    private $logDir;
-    
-    public function __construct() {
-        // 로그 디렉토리 경로 설정 (상대 경로 사용)
-        $this->logDir = './logs';
-        
-        // 로그 디렉토리가 없으면 생성
-        if (!file_exists($this->logDir)) {
-            mkdir($this->logDir, 0755, true);
-        }
-    }
-    
-    private function logConversion($conversionType, $textLength) {
-        // IP 주소 가져오기
-        $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-        
-        // 유효하지 않은 문자를 제거하여 파일명으로 사용 가능하게 함
-        $safeIp = preg_replace('/[^a-zA-Z0-9\.\-]/', '_', $ip);
-        
-        // IP 단위로 로그 파일 생성
-        $logFile = $this->logDir . '/conversion_' . $safeIp . '.log';
-        
-        // 로그 메시지 생성
-        $date = date('Y-m-d H:i:s');
-        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';
-        $logMessage = sprintf("[%s] Type: %s, Length: %d chars, UA: %s\n", 
-            $date, $conversionType, $textLength, $userAgent);
-        
-        // 로그 파일에 기록
-        error_log($logMessage, 3, $logFile);
-        
-        // 로그 파일 크기 확인 (10MB 초과시 로테이션)
-        if (file_exists($logFile) && filesize($logFile) > 10 * 1024 * 1024) {
-            $backupFile = $logFile . '.' . date('Y-m-d-H-i-s') . '.bak';
-            rename($logFile, $backupFile);
-        }
-    }
 
     private function convertHeaders($markdown, $style = 'jira') {
         if ($style === 'bold') {
@@ -211,9 +174,6 @@ class MarkdownConverter {
     }
 
     public function toJira($markdown, $headerStyle = 'jira') {
-        // 변환 전 로깅
-        $this->logConversion('JIRA', strlen($markdown));
-        
         $result = $markdown;
         
         // Convert code blocks first to prevent interference
@@ -236,9 +196,6 @@ class MarkdownConverter {
     }
 
     public function toSlack($markdown) {
-        // 변환 전 로깅
-        $this->logConversion('Slack', strlen($markdown));
-        
         $result = $markdown;
         
         // Convert code blocks first to prevent interference
@@ -480,9 +437,6 @@ class MarkdownConverter {
     }
 
     public function toPlainText($markdown) {
-        // 변환 전 로깅
-        $this->logConversion('PlainText', strlen($markdown));
-        
         $result = $markdown;
         
         // 코드 블록 먼저 변환
